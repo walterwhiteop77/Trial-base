@@ -17,7 +17,7 @@ API_HASH = environ.get("API_HASH", "fc2d0079fe53ffadd23fceb32c825285")
 BOT_TOKEN = environ.get("BOT_TOKEN", "")
 PORT = int(environ.get("PORT", "8080"))
 TIMEZONE = environ.get("TIMEZONE", "Asia/Kolkata")
-OWNER_USERNAME = environ.get("OWNER_USERNAME", "7903367518")
+OWNER_USERNAME = environ.get("OWNER_USERNAME", "Uknowme45678")
 
 # =========================================================
 # 💾 DATABASE CONFIGURATION
@@ -34,9 +34,9 @@ LOG_CHANNEL = int(environ.get("LOG_CHANNEL", "-1002031127227"))
 PREMIUM_LOGS = int(environ.get("PREMIUM_LOGS", "-1002702898412"))
 VERIFIED_LOG = int(environ.get("VERIFIED_LOG", "-1002846350414"))
 
-POST_CHANNEL = int(environ.get("POST_CHANNEL", "-1002756243661"))
+POST_CHANNEL = int(environ.get("POST_CHANNEL", "-1003540936179"))
 VIDEO_CHANNEL = int(environ.get("VIDEO_CHANNEL", "-1002619889589"))
-BRAZZER_CHANNEL = int(environ.get("BRAZZER_CHANNEL", "-1002733047858"))
+BRAZZER_CHANNEL = int(environ.get("BRAZZER_CHANNEL", "-1002756243661"))
 
 # Auth channels list
 auth_channel_str = environ.get("AUTH_CHANNEL", "0")
