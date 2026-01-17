@@ -61,12 +61,12 @@ PREMIUM_DAILY_LIMIT = int(environ.get("PREMIUM_DAILY_LIMIT", "50"))
 # =========================================================
 # 🔗 SHORTLINK & VERIFICATION
 # =========================================================
-SHORTLINK_URL = environ.get("SHORTLINK_URL", "")
-SHORTLINK_API = environ.get("SHORTLINK_API", "")
-POST_SHORTLINK_URL = environ.get("POST_SHORTLINK_URL", "")
-POST_SHORTLINK_API = environ.get("POST_SHORTLINK_API", "")
+SHORTLINK_URL = environ.get("SHORTLINK_URL", "arolink.com")
+SHORTLINK_API = environ.get("SHORTLINK_API", "3adca196c74366f9d2991580d3fc459015b8ae36")
+POST_SHORTLINK_URL = environ.get("POST_SHORTLINK_URL", "arolink.com")
+POST_SHORTLINK_API = environ.get("POST_SHORTLINK_API", "3adca196c74366f9d2991580d3fc459015b8ae36")
 VERIFY_EXPIRE = int(environ.get("VERIFY_EXPIRE", "3600"))
-TUTORIAL_LINK = environ.get("TUTORIAL_LINK", "")
+TUTORIAL_LINK = environ.get("TUTORIAL_LINK", "https://t.me/tutorial_filx/7")
 
 # =========================================================
 # 💳 PAYMENT SETTINGS
@@ -77,7 +77,7 @@ QR_CODE_IMAGE = environ.get("QR_CODE_IMAGE", "https://i.ibb.co/6Q2wN6S/x.jpg")
 # =========================================================
 # 🖼️ IMAGES
 # =========================================================
-START_PIC = environ.get("START_PIC", "https://i.ibb.co/6Q2wN6S/x.jpg")
+START_PIC = environ.get("START_PIC", "https://i.ibb.co/XxstXfL1/x.jpg")
 AUTH_PICS = environ.get("AUTH_PICS", "https://i.ibb.co/6Q2wN6S/x.jpg")
 VERIFY_IMG = environ.get("VERIFY_IMG", "https://i.ibb.co/6Q2wN6S/x.jpg")
 NO_IMG = environ.get("NO_IMG", "https://i.ibb.co/6Q2wN6S/x.jpg")
