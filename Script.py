@@ -136,3 +136,101 @@ class script(object):
 📆 𝖣𝖺𝗍𝖾:- <code>{} </code>
 
 #verified_{}_completed"""
+    
+    # ========== KEEP ALL YOUR EXISTING MESSAGES ==========
+    # (Don't delete START_TXT, HELP_TXT, etc.)
+    
+    # ========== ADD THESE NEW MESSAGES AT THE END ==========
+    
+    # New: Token activation screen
+    TOKEN_ACTIVATION = """
+🎬 <b>HEY! {}</b>
+
+🚫 <b>YOUR TOKEN IS NOT ACTIVE OR EXPIRED.
+PLEASE ACTIVATE IT.</b>
+
+<b>WHAT IS TOKEN</b>
+THIS IS AN ADS TOKEN. AFTER YOU WATCH 1 AD, YOUR TOKEN WILL BE ACTIVATED AND YOU CAN USE THE BOT FOR 12 HOURS FOR FREE
+
+<b>WHY TOKEN</b>
+TOKENS HELP US KEEP THE BOT FREE FOR EVERYONE. WATCHING A SHORT AD SUPPORTS THE BOT.
+
+<b>DON'T WORRY! IT'S COMPLETELY FREE.✅</b>
+
+<b>OR INVITE A FRIEND TO GET 1 HOUR OF BOT ACCESS!</b>
+"""
+
+    # New: Access granted
+    ACCESS_GRANTED = """
+🎉 <b>Access Granted!</b>
+
+You now have full bot access for the next 12 hours, including unlimited link accesses.
+
+<b>What would you like to do?</b>
+"""
+
+    # New: My Status
+    MY_STATUS_TXT = """
+⭐ <b>My Status</b>
+
+🎬 <b>Watched Videos (Total):</b> {total_watched}
+🎬 <b>Watched Videos (Last 24 Hours):</b> {today_watched}
+📂 <b>Current Category:</b> {category}
+🔑 <b>Access Status:</b> {status}
+⏰ <b>Access Expires:</b> {expires}
+⬇️ <b>Downloads:</b> {downloads}
+🔗 <b>Link Access:</b> {link_access} per day (resets daily at 12:00 AM IST)
+👥 <b>Referrals:</b> {referrals}
+"""
+
+    # New: Ad watch instructions
+    AD_WATCH_TXT = """
+📺 <b>Watch Ad to Access Bot</b>
+
+Click below to watch an ad and get 24 hours of access:
+
+<b>iOS Users:</b> Copy the ad link and open it in the Chrome browser
+
+Click "Watch Ad" button below to proceed.
+"""
+
+    # New: How to open
+    HOW_TO_OPEN = """
+❓ <b>How to Open Ad Links</b>
+
+<b>For iOS Users:</b>
+1. Long press on the ad link
+2. Select "Copy Link"
+3. Open Chrome browser
+4. Paste the link in address bar
+5. Complete the ad verification
+
+<b>For Android Users:</b>
+1. Simply click on the ad link
+2. Complete the verification
+
+After completing the ad, your access will be automatically activated!
+"""
+
+    # New: Referral
+    REFERRAL_TXT = """
+👥 <b>Invite Friends & Earn!</b>
+
+<b>Your Referral Link:</b>
+<code>{ref_link}</code>
+
+<b>How it works:</b>
+1. Share your link with friends
+2. When they join using your link, you get <b>1 hour</b> free access
+3. They also get <b>30 minutes</b> bonus access!
+
+<b>Your Stats:</b>
+👥 Total Referrals: {count}
+⏰ Total Earned: {count} hours
+
+<b>Rewards:</b>
+- 5 referrals = 1 day free access
+- 10 referrals = 3 days free access
+- 20 referrals = 1 week free access
+- 50 referrals = 1 month premium!
+"""
