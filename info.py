@@ -48,7 +48,7 @@ AUTH_CHANNEL = [int(x) for x in auth_channel_str.split() if x.strip().lstrip("-"
 FSUB = str_to_bool(environ.get("FSUB"), False)
 IS_VERIFY = str_to_bool(environ.get("IS_VERIFY"), False)
 POST_SHORTLINK = str_to_bool(environ.get("POST_SHORTLINK"), False)
-SEND_POST = str_to_bool(environ.get("SEND_POST"), False)
+SEND_POST = str_to_bool(environ.get("SEND_POST"), True)
 PROTECT_CONTENT = str_to_bool(environ.get("PROTECT_CONTENT"), True)
 
 # =========================================================
@@ -85,4 +85,4 @@ NO_IMG = environ.get("NO_IMG", "https://i.ibb.co/6Q2wN6S/x.jpg")
 # =========================================================
 # 🌐 WEB APP
 # =========================================================
-WEB_APP_URL = environ.get("WEB_APP_URL", "")
+WEB_APP_URL = environ.get("WEB_APP_URL", "https://trial-base.onrender.com")
