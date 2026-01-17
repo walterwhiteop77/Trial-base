@@ -86,3 +86,17 @@ NO_IMG = environ.get("NO_IMG", "https://i.ibb.co/6Q2wN6S/x.jpg")
 # 🌐 WEB APP
 # =========================================================
 WEB_APP_URL = environ.get("WEB_APP_URL", "https://trial-base.onrender.com")
+
+# ==================== V2 NEW SETTINGS ====================
+
+# Auto-delete time for videos (in seconds)
+AUTO_DELETE_TIME = int(environ.get("AUTO_DELETE_TIME", "600"))  # 10 minutes
+
+# Daily limits
+FREE_DAILY_LIMIT = int(environ.get("FREE_DAILY_LIMIT", "5"))
+PREMIUM_DAILY_LIMIT = int(environ.get("PREMIUM_DAILY_LIMIT", "999"))
+
+# Links
+PAYMENT_URL = environ.get("PAYMENT_URL", "https://i.ibb.co/6Q2wN6S/x.jpg")
+AD_LINK = environ.get("AD_LINK", "https://i.ibb.co/6Q2wN6S/x.jpg")
+DARK_CONTENT_LINK = environ.get("DARK_CONTENT_LINK", "https://i.ibb.co/6Q2wN6S/x.jpg")
