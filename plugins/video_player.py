@@ -13,7 +13,7 @@ ACTIVE_PLAYERS = {}
 # 🎬 VIDEO PLAYER HANDLER
 # ================================================
 @Client.on_message(filters.command("player") | filters.regex(r"(?i)^get video$"))
-async def video_player_handler(client, message: Message):
+async def video_player(client, message: Message, video_id: str, auto_delete: bool = True):
     user_id = message.from_user.id
     
     # Check if user already has active player
