@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from info import DB_URL, DB_NAME, TIMEZONE, VERIFY_EXPIRE
 import motor.motor_asyncio
-from info import DATABASE_URI, DATABASE_NAME
+from info import DB_URL, DB_NAME
 from datetime import datetime, timedelta
 
 
