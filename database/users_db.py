@@ -494,5 +494,90 @@ class Database:
         })
         return level1_count
 
+# ========== VIDEO PLAYER FEATURES ==========
+
+async def get_video_metadata(self, file_id):
+    """Get video data including likes/dislikes"""
+    video = await self.videos.find_one({"file_id": file_id})
+    
+    if not video:
+        return {
+            "file_unique_id": "Unknown",
+            "likes": 0,
+            "dislikes": 0
+        }
+    
+    return {
+        "file_unique_id": video.get("file_unique_id", "Unknown"),
+        "likes": video.get("likes", 0),
+        "dislikes": video.get("dislikes", 0)
+    }
+
+async def add_video_reaction(self, file_unique_id, reaction_type, user_id):
+    """Add like or dislike to video"""
+    # Check if user already reacted
+    video = await self.videos.find_one({"file_unique_id": file_unique_id})
+    
+    if not video:
+        return
+    
+    # Remove previous reaction if exists
+    if f"liked_by" in video:
+        if user_id in video.get("liked_by", []):
+            await self.videos.update_one(
+                {"file_unique_id": file_unique_id},
+                {"$pull": {"liked_by": user_id}, "$inc": {"likes": -1}}
+            )
+    
+    if f"disliked_by" in video:
+        if user_id in video.get("disliked_by", []):
+            await self.videos.update_one(
+                {"file_unique_id": file_unique_id},
+                {"$pull": {"disliked_by": user_id}, "$inc": {"dislikes": -1}}
+            )
+    
+    # Add new reaction
+    if reaction_type == "like":
+        await self.videos.update_one(
+            {"file_unique_id": file_unique_id},
+            {
+                "$addToSet": {"liked_by": user_id},
+                "$inc": {"likes": 1}
+            },
+            upsert=True
+        )
+    elif reaction_type == "dislike":
+        await self.videos.update_one(
+            {"file_unique_id": file_unique_id},
+            {
+                "$addToSet": {"disliked_by": user_id},
+                "$inc": {"dislikes": 1}
+            },
+            upsert=True
+        )
+
+async def add_bookmark(self, user_id, file_id):
+    """Add video to user's bookmarks"""
+    await self.users.update_one(
+        {"id": user_id},
+        {"$addToSet": {"bookmarks": file_id}},
+        upsert=True
+    )
+
+async def get_previous_video(self, user_id):
+    """Get last seen video (for Previous button)"""
+    history = await self.historys.find_one({"user_id": user_id})
+    
+    if not history or not history.get("seen"):
+        return None
+    
+    seen_list = history.get("seen", [])
+    
+    if len(seen_list) < 2:
+        return None
+    
+    # Return second last video
+    return seen_list[-2]
+
 # Initialize
 db = Database()
