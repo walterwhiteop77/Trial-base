@@ -30,35 +30,19 @@ class Database:
         self.brazzers = mydb.brazzers
         self.verify_id = mydb.verify_id
         self.refer_collection = mydb.referrals
-        self.braz_history = mydb.braz_history
+        self.braz_history = mydb.braz_history        
         self.blocked_users = mydb.blocked_users
 
-        # Added collections (previously added in a stray __init__)
-        self.video_stats = mydb.video_stats
-        self.bookmarks = mydb.bookmarks
-
     # ---------- USERS ----------
-    def new_user(self, id, name):
-        return dict(
-            id=id,
-            name=name,
-            ban_status=True,  # Keep your existing ban logic
-
-            # KEEP YOUR EXISTING PREMIUM FIELDS
-            has_premium=False,
-            premium_expires=None,
-            premium_type=None,
-
-            # ADD THESE NEW FIELDS
-            access_expires=datetime.now(timezone.utc),
-            total_videos_watched=0,
-            videos_today=0,
-            last_video_date=datetime.now(timezone.utc).date().isoformat(),
-            current_category='all',
-            referral_count=0,
-            liked_videos=[],
-            disliked_videos=[],
-        )
+    async def add_user(self, id, name):
+        if not await self.users.find_one({"id": id}):
+            await self.users.insert_one({
+                "id": id,
+                "name": name,
+                "video_count": 0,
+                "last_date": None,
+                "expiry_time": None
+            })
 
     async def is_user_exist(self, id):
         return bool(await self.users.find_one({'id': int(id)}))
@@ -77,7 +61,7 @@ class Database:
 
     async def get_all_users(self):
         return self.users.find({})
-
+        
     # ---------- COUNTS ----------
     async def total_files_count(self):
         return await self.videos.count_documents({})
@@ -90,8 +74,9 @@ class Database:
 
     async def total_redeem_count(self):
         return await self.codes.count_documents({})
-
+        
     # ---------- REFERRAL SYSTEM ----------
+    
     async def is_user_in_list(self, user_id):
         user = await self.refer_collection.find_one({"user_id": int(user_id)})
         return True if user else False
@@ -103,8 +88,8 @@ class Database:
     async def add_refer_points(self, user_id: int, points: int):
         # Yeh points ko seedha SET kar dega (replace)
         await self.refer_collection.update_one(
-            {"user_id": int(user_id)},
-            {"$set": {"points": points}},
+            {"user_id": int(user_id)}, 
+            {"$set": {"points": points}}, 
             upsert=True
         )
 
@@ -114,10 +99,10 @@ class Database:
         new_points = current_points + amount
         if new_points < 0:
             new_points = 0
-
+            
         await self.refer_collection.update_one(
-            {"user_id": int(user_id)},
-            {"$set": {"points": new_points}},
+            {"user_id": int(user_id)}, 
+            {"$set": {"points": new_points}}, 
             upsert=True
         )
         return new_points
@@ -127,14 +112,14 @@ class Database:
         # Current expiry check karo
         user = await self.get_user(user_id)
         now = datetime.now(timezone.utc)
-
-        current_expiry = user.get("expiry_time") if user else None
-
+        
+        current_expiry = user.get("expiry_time")
+        
         if current_expiry and isinstance(current_expiry, datetime):
             # Ensure timezone awareness
             if current_expiry.tzinfo is None:
                 current_expiry = current_expiry.replace(tzinfo=timezone.utc)
-
+            
             # Agar pehle se premium hai, to usme days add karo
             if current_expiry > now:
                 new_expiry = current_expiry + timedelta(days=days)
@@ -149,8 +134,9 @@ class Database:
             {"$set": {"expiry_time": new_expiry}}
         )
         return new_expiry
-
+        
     # ---------- BLOCK SYSTEM ----------
+
     async def unblock_user(self, user_id: int):
         """Unblock a user."""
         await self.blocked_users.delete_one({"user_id": user_id})
@@ -182,11 +168,11 @@ class Database:
         user = await self.users.find_one({"id": user_id})
         if not user or "temp_ban_expiry" not in user:
             return False, 0
-
+            
         expiry = user["temp_ban_expiry"]
-        if isinstance(expiry, datetime) and expiry.tzinfo is None:
+        if expiry.tzinfo is None:
             expiry = expiry.replace(tzinfo=timezone.utc)
-
+            
         now = datetime.now(timezone.utc)
         if now < expiry:
             remaining = int((expiry - now).total_seconds())
@@ -195,7 +181,7 @@ class Database:
             # Ban expire ho gaya, remove field
             await self.users.update_one({"id": user_id}, {"$unset": {"temp_ban_expiry": ""}})
             return False, 0
-
+            
     # ---------- PREMIUM / EXPIRY ----------
     async def has_premium_access(self, user_id):
         user_data = await self.get_user(user_id)
@@ -208,7 +194,7 @@ class Database:
 
         # Use UTC for comparison
         now = datetime.now(timezone.utc)
-
+        
         if isinstance(expiry_time, datetime):
             # If stored time is naive (no timezone), treat it as UTC
             if expiry_time.tzinfo is None:
@@ -293,17 +279,17 @@ class Database:
         await self.brazzers.delete_many({})
         await self.braz_history.delete_many({})
         return True
-
+        
     async def increase_video_count(self, user_id, username):
         today = get_ist_today()
         # Convert today date to datetime object for storage (Midnight)
-        today_dt = datetime.combine(today, datetime.min.time()).replace(tzinfo=pytz.timezone(TIMEZONE))
+        today_dt = datetime.combine(today, datetime.min.time())
 
         user = await self.users.find_one({"id": user_id})
 
         if user:
             last_date = user.get("last_date")
-
+            
             # Safe conversion of stored date
             if isinstance(last_date, datetime):
                 if last_date.tzinfo is not None:
@@ -338,7 +324,7 @@ class Database:
                 "last_date": today_dt,
                 "expiry_time": None
             })
-
+            
     async def get_video_count(self, user_id: int):
         today = get_ist_today()
         user = await self.users.find_one({"id": user_id})
@@ -349,11 +335,11 @@ class Database:
                     check_date = last_date.astimezone(pytz.timezone(TIMEZONE)).date()
                 else:
                     check_date = last_date.date()
-
+                    
                 if check_date == today:
                     return user.get("video_count", 0)
         return 0
-
+        
     async def get_unseen_video(self, user_id):
         seen = await self.historys.find_one({"user_id": user_id})
         seen_ids = seen.get("seen", []) if seen else []
@@ -378,7 +364,7 @@ class Database:
             pipeline = [{"$sample": {"size": 1}}]
             cursor = self.videos.aggregate(pipeline)
             result = await cursor.to_list(length=1)
-
+            
             if result:
                 return result[0]["file_id"]
         except Exception as e:
@@ -398,7 +384,7 @@ class Database:
             {"$set": {"seen": []}},
             upsert=True
         )
-
+        
     async def add_brazzers_video(self, file_unique_id, file_id):
         exists = await self.brazzers.find_one({"file_unique_id": file_unique_id})
         if not exists:
@@ -430,19 +416,19 @@ class Database:
             {"$addToSet": {"seen": file_id}},
             upsert=True
         )
-
+        
     async def reset_seen_brazzers(self, user_id: int):
         await self.braz_history.update_one(
             {"user_id": user_id},
             {"$set": {"seen": []}},
             upsert=True
         )
-
+            
     # ---------- VERIFICATION SYSTEM ----------
     async def get_notcopy_user(self, user_id):
         user_id = int(user_id)
         user = await self.misc.find_one({"user_id": user_id})
-
+        
         # Use UTC for default date
         default_date = datetime(2020, 5, 17, 0, 0, 0, tzinfo=timezone.utc)
 
@@ -464,27 +450,27 @@ class Database:
 
     async def is_user_verified(self, user_id):
         user = await self.get_notcopy_user(user_id)
-
+        
         # Fetch date safely
         pastDate = user.get("last_verified")
-
+        
         # If date is missing for some reason, default to old date
         if not pastDate:
-            pastDate = datetime(2020, 5, 17, 0, 0, 0, tzinfo=timezone.utc)
+             pastDate = datetime(2020, 5, 17, 0, 0, 0, tzinfo=timezone.utc)
 
         # Standardize pastDate to UTC
         if pastDate.tzinfo is None:
-            pastDate = pastDate.replace(tzinfo=timezone.utc)
-
+             pastDate = pastDate.replace(tzinfo=timezone.utc)
+        
         # Get current time in UTC
         current_time = datetime.now(timezone.utc)
-
+        
         # 🟢 FAST EXPIRE LOGIC
         time_diff = current_time - pastDate
-
+        
         if time_diff < timedelta(seconds=VERIFY_EXPIRE):
             return True
-
+            
         return False
 
     async def create_verify_id(self, user_id: int, hash, file_id=None):
@@ -507,147 +493,6 @@ class Database:
             "last_verified": {"$gte": midnight_utc}
         })
         return level1_count
-
-    # ==================== NEW V2 FUNCTIONS ====================
-    async def check_access_status(self, user_id):
-        """Check if user has active access"""
-        user = await self.get_user(user_id)
-        if not user:
-            return False
-
-        # Premium users always have access
-        if await self.has_premium_access(user_id):
-            return True
-
-        # Check token access
-        access_expires = user.get('access_expires')
-        if not access_expires:
-            return False
-
-        # normalize
-        if isinstance(access_expires, datetime) and access_expires.tzinfo is None:
-            access_expires = access_expires.replace(tzinfo=timezone.utc)
-
-        return access_expires > datetime.now(timezone.utc)
-
-    async def grant_access(self, user_id, hours=12):
-        """Grant token access"""
-        user = await self.get_user(user_id)
-        if not user:
-            return None
-
-        current_expiry = user.get('access_expires')
-        now = datetime.now(timezone.utc)
-        if isinstance(current_expiry, datetime) and current_expiry.tzinfo is None:
-            current_expiry = current_expiry.replace(tzinfo=timezone.utc)
-
-        if current_expiry and current_expiry > now:
-            new_expiry = current_expiry + timedelta(hours=hours)
-        else:
-            new_expiry = now + timedelta(hours=hours)
-
-        await self.users.update_one(
-            {'id': user_id},
-            {'$set': {'access_expires': new_expiry}}
-        )
-        return new_expiry
-
-    async def increment_video_watch(self, user_id):
-        """Track video watches"""
-        user = await self.get_user(user_id)
-        if not user:
-            return None
-
-        today = datetime.now(timezone.utc).date().isoformat()
-
-        if user.get('last_video_date') != today:
-            await self.users.update_one(
-                {'id': user_id},
-                {
-                    '$set': {
-                        'videos_today': 1,
-                        'last_video_date': today
-                    },
-                    '$inc': {'total_videos_watched': 1}
-                }
-            )
-        else:
-            await self.users.update_one(
-                {'id': user_id},
-                {'$inc': {
-                    'videos_today': 1,
-                    'total_videos_watched': 1
-                }}
-            )
-
-    async def update_user_category(self, user_id, category):
-        """Update category"""
-        await self.users.update_one(
-            {'id': user_id},
-            {'$set': {'current_category': category}}
-        )
-
-    async def increment_referral(self, user_id):
-        """Track referrals"""
-        await self.users.update_one(
-            {'id': user_id},
-            {'$inc': {'referral_count': 1}}
-        )
-
-    async def like_video(self, user_id, video_id):
-        """Like video"""
-        await self.users.update_one(
-            {'id': user_id},
-            {'$pull': {'disliked_videos': video_id}}
-        )
-        await self.users.update_one(
-            {'id': user_id},
-            {'$addToSet': {'liked_videos': video_id}}
-        )
-        await self.video_stats.update_one(
-            {'video_id': video_id},
-            {'$inc': {'likes': 1}},
-            upsert=True
-        )
-
-    async def dislike_video(self, user_id, video_id):
-        """Dislike video"""
-        await self.users.update_one(
-            {'id': user_id},
-            {'$pull': {'liked_videos': video_id}}
-        )
-        await self.users.update_one(
-            {'id': user_id},
-            {'$addToSet': {'disliked_videos': video_id}}
-        )
-        await self.video_stats.update_one(
-            {'video_id': video_id},
-            {'$inc': {'dislikes': 1}},
-            upsert=True
-        )
-
-    async def get_video_likes(self, video_id):
-        """Get likes"""
-        stats = await self.video_stats.find_one({'video_id': video_id})
-        return stats.get('likes', 0) if stats else 0
-
-    async def get_video_dislikes(self, video_id):
-        """Get dislikes"""
-        stats = await self.video_stats.find_one({'video_id': video_id})
-        return stats.get('dislikes', 0) if stats else 0
-
-    async def add_bookmark(self, user_id, video_id):
-        """Bookmark video"""
-        await self.bookmarks.update_one(
-            {'user_id': user_id},
-            {'$addToSet': {'videos': video_id}},
-            upsert=True
-        )
-
-    async def get_bookmarks(self, user_id):
-        """Get bookmarks"""
-        doc = await self.bookmarks.find_one({'user_id': user_id})
-        return doc.get('videos', []) if doc else []
 
 # Initialize
 db = Database()
