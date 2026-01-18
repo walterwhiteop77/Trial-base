@@ -1,6 +1,7 @@
-# ============================================================
-# FILE 1: plugins/commands.py (MAIN START COMMAND - MODIFIED)
-# ============================================================
+"""
+plugins/command.py
+Enhanced start command with V2 features - matching your exact repo structure
+"""
 
 import os
 import logging
@@ -12,24 +13,41 @@ from pyrogram.errors import ChatAdminRequired, FloodWait
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, CallbackQuery
 from database.ia_filterdb import Media, get_file_details, get_search_results
 from database.users_chats_db import db
-from info import *
-from utils import get_size, is_subscribed, temp
+from info import ADMINS, AUTH_CHANNEL, AUTH_USERS, CUSTOM_FILE_CAPTION, AUTH_GROUPS, P_TTI_SHOW_OFF, IMDB, SINGLE_BUTTON, SPELL_CHECK_REPLY, IMDB_TEMPLATE, LOG_CHANNEL, SUPPORT_CHAT, PICS
+from utils import get_size, is_subscribed, get_poster, search_gagala, temp, get_settings, save_group_settings
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
+# Import new settings (add to info.py if not present)
+try:
+    from info import AUTO_DELETE_TIME, FREE_DAILY_LIMIT, PREMIUM_DAILY_LIMIT, DEFAULT_ACCESS_HOURS, REFERRER_BONUS, REFERRED_BONUS, DARK_CONTENT_LINK, PAYMENT_LINK, AD_CHANNEL
+except ImportError:
+    # Default values if not in info.py
+    AUTO_DELETE_TIME = 600
+    FREE_DAILY_LIMIT = 5
+    PREMIUM_DAILY_LIMIT = 999
+    DEFAULT_ACCESS_HOURS = 12
+    REFERRER_BONUS = 1.0
+    REFERRED_BONUS = 0.5
+    DARK_CONTENT_LINK = "https://t.me/your_channel"
+    PAYMENT_LINK = "https://t.me/payment"
+    AD_CHANNEL = "your_ad_channel"
+
+
 # ==================== START COMMAND - ENHANCED WITH V2 FEATURES ====================
 
 @Client.on_message(filters.command("start") & filters.private)
-async def start(client, message):
+async def start(bot, message):
+    """Enhanced start command with token activation and main menu"""
     user_id = message.from_user.id
     first_name = message.from_user.first_name
     
     # Add user to database if not exists
     if not await db.is_user_exist(user_id):
         await db.add_user(user_id, first_name)
-        await client.send_message(
+        await bot.send_message(
             LOG_CHANNEL,
             f"#NewUser\n\n**ID:** `{user_id}`\n**Name:** {first_name}\n**Username:** @{message.from_user.username or 'None'}"
         )
@@ -43,22 +61,21 @@ async def start(client, message):
     if len(message.text.split()) > 1:
         data = message.text.split(None, 1)[1]
         if data.startswith("ref_"):
-            await handle_referral(client, message, data)
+            await handle_referral(bot, message, data)
             return
     
     # Check user's access status
-    user_data = await db.get_user(user_id)
     has_access = await db.check_access_status(user_id)
     
     if not has_access:
         # User doesn't have access - show token activation screen
-        await show_token_activation_screen(client, message)
+        await show_token_activation_screen(bot, message)
     else:
         # User has access - show main menu
-        await show_main_menu(client, message)
+        await show_main_menu(bot, message)
 
 
-async def show_token_activation_screen(client, message):
+async def show_token_activation_screen(bot, message):
     """Display token activation screen from screenshot"""
     user_name = message.from_user.mention
     
@@ -96,7 +113,7 @@ TOKENS HELP US KEEP THE BOT FREE FOR EVERYONE. WATCHING A SHORT AD SUPPORTS THE 
     )
 
 
-async def show_main_menu(client, message):
+async def show_main_menu(bot, message):
     """Display main menu after access is granted"""
     text = """
 🎉 <b>Access Granted!</b>
@@ -120,7 +137,7 @@ You now have full bot access for the next 12 hours, including unlimited link acc
     )
 
 
-async def handle_referral(client, message, data):
+async def handle_referral(bot, message, data):
     """Handle referral link clicks"""
     try:
         referrer_id = int(data.split("_")[1])
@@ -128,21 +145,20 @@ async def handle_referral(client, message, data):
         
         # Don't allow self-referral
         if referrer_id == user_id:
-            await show_token_activation_screen(client, message)
+            await show_token_activation_screen(bot, message)
             return
         
-        # Check if user is new or hasn't used bot before
+        # Check if user is new
         user_data = await db.get_user(user_id)
         if user_data and user_data.get('total_videos_watched', 0) > 0:
-            # User already used the bot
-            await show_main_menu(client, message)
+            await show_main_menu(bot, message)
             return
         
         # Grant access to new user (30 minutes)
-        await db.grant_access(user_id, hours=0.5)
+        await db.grant_access(user_id, hours=REFERRED_BONUS)
         
         # Grant bonus to referrer (1 hour)
-        await db.grant_access(referrer_id, hours=1)
+        await db.grant_access(referrer_id, hours=REFERRER_BONUS)
         await db.increment_referral(referrer_id)
         
         # Notify both users
@@ -154,7 +170,7 @@ async def handle_referral(client, message, data):
         )
         
         try:
-            await client.send_message(
+            await bot.send_message(
                 referrer_id,
                 "🎉 <b>New Referral!</b>\n\n"
                 "Someone joined using your link!\n"
@@ -165,17 +181,17 @@ async def handle_referral(client, message, data):
             pass
         
         await asyncio.sleep(2)
-        await show_main_menu(client, message)
+        await show_main_menu(bot, message)
         
     except Exception as e:
         logger.error(f"Referral error: {e}")
-        await show_token_activation_screen(client, message)
+        await show_token_activation_screen(bot, message)
 
 
 # ==================== CALLBACK QUERY HANDLERS ====================
 
 @Client.on_callback_query(filters.regex("^watch_ad$"))
-async def watch_ad_callback(client, callback_query):
+async def watch_ad_callback(bot, callback_query):
     """Handle Watch Ad button click"""
     text = """
 📺 <b>Watch Ad to Access Bot</b>
@@ -201,7 +217,7 @@ Click "Watch Ad" button below to proceed.
 
 
 @Client.on_callback_query(filters.regex("^how_to_open$"))
-async def how_to_open_callback(client, callback_query):
+async def how_to_open_callback(bot, callback_query):
     """Show instructions for opening ad links"""
     text = """
 ❓ <b>How to Open Ad Links</b>
@@ -232,10 +248,10 @@ After completing the ad, your access will be automatically activated!
 
 
 @Client.on_callback_query(filters.regex("^refer_friend$"))
-async def refer_friend_callback(client, callback_query):
+async def refer_friend_callback(bot, callback_query):
     """Show referral information"""
     user_id = callback_query.from_user.id
-    bot_username = (await client.get_me()).username
+    bot_username = (await bot.get_me()).username
     ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
     
     user_data = await db.get_user(user_id)
@@ -276,7 +292,7 @@ async def refer_friend_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^my_status$"))
-async def my_status_callback(client, callback_query):
+async def my_status_callback(bot, callback_query):
     """Show user status from screenshot"""
     user_id = callback_query.from_user.id
     user_data = await db.get_user(user_id)
@@ -286,7 +302,7 @@ async def my_status_callback(client, callback_query):
         return
     
     # Calculate status
-    has_premium = user_data.get('has_premium', False)
+    has_premium = await db.has_premium_access(user_id)
     access_expires = user_data.get('access_expires', datetime.now())
     
     if has_premium:
@@ -325,7 +341,7 @@ async def my_status_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^get_video$"))
-async def get_video_callback(client, callback_query):
+async def get_video_callback(bot, callback_query):
     """Handle Get Video button - sends video with player controls"""
     user_id = callback_query.from_user.id
     
@@ -340,9 +356,9 @@ async def get_video_callback(client, callback_query):
     
     # Check daily limit
     user_data = await db.get_user(user_id)
-    has_premium = user_data.get('has_premium', False)
+    has_premium = await db.has_premium_access(user_id)
     
-    daily_limit = 999 if has_premium else 5
+    daily_limit = PREMIUM_DAILY_LIMIT if has_premium else FREE_DAILY_LIMIT
     today_count = user_data.get('videos_today', 0)
     
     if today_count >= daily_limit and not has_premium:
@@ -355,27 +371,32 @@ async def get_video_callback(client, callback_query):
     # Get random video from category
     category = user_data.get('current_category', 'all')
     
-    # Query videos from database
-    if category == 'all':
-        files = await Media.find().to_list(length=100)
-    else:
-        files = await Media.find({'file_type': category}).to_list(length=100)
-    
-    if not files:
-        await callback_query.answer("No videos available in this category!", show_alert=True)
-        return
-    
-    # Pick random file
-    file = random.choice(files)
-    
-    # Send video with player interface
-    await send_video_player(client, callback_query.message, file, user_id)
-    
-    # Track video watch
-    await db.increment_video_watch(user_id)
+    try:
+        # Query videos from database
+        if category == 'all' or category == 'mix':
+            files = await Media.find().to_list(length=100)
+        else:
+            files = await Media.find({'file_type': category}).to_list(length=100)
+        
+        if not files:
+            await callback_query.answer("No videos available in this category!", show_alert=True)
+            return
+        
+        # Pick random file
+        file = random.choice(files)
+        
+        # Send video with player interface
+        await send_video_player(bot, callback_query.message, file, user_id)
+        
+        # Track video watch
+        await db.increment_video_watch(user_id)
+        
+    except Exception as e:
+        logger.error(f"Error getting video: {e}")
+        await callback_query.answer("Error loading video. Please try again.", show_alert=True)
 
 
-async def send_video_player(client, message, file, user_id):
+async def send_video_player(bot, message, file, user_id):
     """Send video with interactive player controls from screenshot"""
     
     # Calculate like percentage
@@ -406,13 +427,13 @@ async def send_video_player(client, message, file, user_id):
             InlineKeyboardButton("🔖 Bookmark", callback_data=f"bookmark_{file.file_id}")
         ],
         [
-            InlineKeyboardButton("⭐ For D@rk C00ntent", url="https://t.me/your_dark_channel")
+            InlineKeyboardButton("⭐ For D@rk C00ntent", url=DARK_CONTENT_LINK)
         ]
     ])
     
     try:
         # Send video
-        sent_msg = await client.send_cached_media(
+        sent_msg = await bot.send_cached_media(
             chat_id=message.chat.id,
             file_id=file.file_id,
             caption=caption,
@@ -420,8 +441,8 @@ async def send_video_player(client, message, file, user_id):
             parse_mode=enums.ParseMode.HTML
         )
         
-        # Auto-delete after 10 minutes
-        asyncio.create_task(auto_delete_message(sent_msg, 600))
+        # Auto-delete after configured time
+        asyncio.create_task(auto_delete_message(sent_msg, AUTO_DELETE_TIME))
         
     except Exception as e:
         logger.error(f"Error sending video: {e}")
@@ -438,7 +459,7 @@ async def auto_delete_message(message, delay):
 
 
 @Client.on_callback_query(filters.regex("^like_"))
-async def like_video_callback(client, callback_query):
+async def like_video_callback(bot, callback_query):
     """Handle video like"""
     video_id = callback_query.data.split("_", 1)[1]
     user_id = callback_query.from_user.id
@@ -448,7 +469,7 @@ async def like_video_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^dislike_"))
-async def dislike_video_callback(client, callback_query):
+async def dislike_video_callback(bot, callback_query):
     """Handle video dislike"""
     video_id = callback_query.data.split("_", 1)[1]
     user_id = callback_query.from_user.id
@@ -458,12 +479,12 @@ async def dislike_video_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^download_"))
-async def download_video_callback(client, callback_query):
+async def download_video_callback(bot, callback_query):
     """Handle video download"""
     user_id = callback_query.from_user.id
-    user_data = await db.get_user(user_id)
+    has_premium = await db.has_premium_access(user_id)
     
-    if not user_data.get('has_premium'):
+    if not has_premium:
         await callback_query.answer(
             "⚠️ Download feature is for Premium users only!",
             show_alert=True
@@ -477,13 +498,13 @@ async def download_video_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^(previous_video|next_video)$"))
-async def navigate_video_callback(client, callback_query):
+async def navigate_video_callback(bot, callback_query):
     """Handle Previous/Next video navigation"""
-    await get_video_callback(client, callback_query)
+    await get_video_callback(bot, callback_query)
 
 
 @Client.on_callback_query(filters.regex("^change_category$"))
-async def change_category_callback(client, callback_query):
+async def change_category_callback(bot, callback_query):
     """Show category selection menu"""
     text = "🔄 <b>Select Category</b>\n\nChoose a category to browse videos:"
     
@@ -503,7 +524,7 @@ async def change_category_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^cat_"))
-async def select_category_callback(client, callback_query):
+async def select_category_callback(bot, callback_query):
     """Handle category selection"""
     category = callback_query.data.split("_", 1)[1]
     user_id = callback_query.from_user.id
@@ -514,11 +535,11 @@ async def select_category_callback(client, callback_query):
     await callback_query.answer(f"✅ Category changed to: {category}", show_alert=False)
     
     # Get video from new category
-    await get_video_callback(client, callback_query)
+    await get_video_callback(bot, callback_query)
 
 
 @Client.on_callback_query(filters.regex("^bookmark_"))
-async def bookmark_video_callback(client, callback_query):
+async def bookmark_video_callback(bot, callback_query):
     """Handle video bookmark"""
     video_id = callback_query.data.split("_", 1)[1]
     user_id = callback_query.from_user.id
@@ -528,39 +549,49 @@ async def bookmark_video_callback(client, callback_query):
 
 
 @Client.on_callback_query(filters.regex("^back_to_start$"))
-async def back_to_start_callback(client, callback_query):
+async def back_to_start_callback(bot, callback_query):
     """Go back to start screen"""
     await callback_query.message.delete()
-    await show_token_activation_screen(client, callback_query.message)
+    fake_msg = type('obj', (object,), {
+        'from_user': callback_query.from_user,
+        'text': '/start',
+        'reply_text': callback_query.message.reply_text
+    })()
+    await start(bot, fake_msg)
 
 
 @Client.on_callback_query(filters.regex("^back_to_main$"))
-async def back_to_main_callback(client, callback_query):
+async def back_to_main_callback(bot, callback_query):
     """Go back to main menu"""
     await callback_query.message.delete()
-    await show_main_menu(client, callback_query.message)
+    fake_msg = type('obj', (object,), {
+        'from_user': callback_query.from_user,
+        'text': '/start',
+        'reply_text': callback_query.message.reply_text
+    })()
+    await show_main_menu(bot, fake_msg)
 
 
 # ==================== USER COMMANDS ====================
 
 @Client.on_message(filters.command("mystatus") & filters.private)
-async def mystatus_command(client, message):
+async def mystatus_command(bot, message):
     """My Status command"""
     fake_query = type('obj', (object,), {
         'from_user': message.from_user,
         'message': message
     })()
-    await my_status_callback(client, fake_query)
+    await my_status_callback(bot, fake_query)
 
 
 @Client.on_message(filters.command("refer") & filters.private)
-async def refer_command(client, message):
+async def refer_command(bot, message):
     """Referral command"""
     fake_query = type('obj', (object,), {
         'from_user': message.from_user,
         'message': message
     })()
-    await refer_friend_callback(client, fake_query)
+    await refer_friend_callback(bot, fake_query)
 
 
-# Keep all your existing commands (help, about, stats, etc.)
+# Keep all your other existing commands below this line...
