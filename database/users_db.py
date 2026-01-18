@@ -4,8 +4,6 @@ import logging
 from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 from info import DB_URL, DB_NAME, TIMEZONE, VERIFY_EXPIRE
-import motor.motor_asyncio
-from info import DB_URL, DB_NAME
 from datetime import datetime, timedelta
 
 
@@ -38,15 +36,27 @@ class Database:
         self.blocked_users = mydb.blocked_users
 
     # ---------- USERS ----------
-    async def add_user(self, id, name):
-        if not await self.users.find_one({"id": id}):
-            await self.users.insert_one({
-                "id": id,
-                "name": name,
-                "video_count": 0,
-                "last_date": None,
-                "expiry_time": None
-            })
+    def new_user(self, id, name):
+    return dict(
+        id=id,
+        name=name,
+        ban_status=True,  # Keep your existing ban logic
+        
+        # KEEP YOUR EXISTING PREMIUM FIELDS
+        has_premium=False,
+        premium_expires=None,
+        premium_type=None,
+        
+        # ADD THESE NEW FIELDS
+        access_expires=datetime.now(),
+        total_videos_watched=0,
+        videos_today=0,
+        last_video_date=datetime.now().date().isoformat(),
+        current_category='all',
+        referral_count=0,
+        liked_videos=[],
+        disliked_videos=[],
+    )
 
     async def is_user_exist(self, id):
         return bool(await self.users.find_one({'id': int(id)}))
@@ -498,355 +508,142 @@ class Database:
         })
         return level1_count
 
+    async def __init__(self, uri, database_name):
+    # ... your existing code ...
+    
+    # ADD THESE TWO LINES:
+    self.video_stats = self.db.video_stats
+    self.bookmarks = self.db.bookmarks
+
+# ==================== NEW V2 FUNCTIONS ====================
+
+async def check_access_status(self, user_id):
+    """Check if user has active access"""
+    user = await self.get_user(user_id)
+    if not user:
+        return False
+    
+    # Premium users always have access
+    if await self.has_premium_access(user_id):
+        return True
+    
+    # Check token access
+    access_expires = user.get('access_expires', datetime.now())
+    return access_expires > datetime.now()
+
+async def grant_access(self, user_id, hours=12):
+    """Grant token access"""
+    user = await self.get_user(user_id)
+    if not user:
+        return
+    
+    current_expiry = user.get('access_expires', datetime.now())
+    if current_expiry > datetime.now():
+        new_expiry = current_expiry + timedelta(hours=hours)
+    else:
+        new_expiry = datetime.now() + timedelta(hours=hours)
+    
+    await self.col.update_one(
+        {'id': user_id},
+        {'$set': {'access_expires': new_expiry}}
+    )
+
+async def increment_video_watch(self, user_id):
+    """Track video watches"""
+    user = await self.get_user(user_id)
+    if not user:
+        return
+    
+    today = datetime.now().date().isoformat()
+    
+    if user.get('last_video_date') != today:
+        await self.col.update_one(
+            {'id': user_id},
+            {'$set': {
+                'videos_today': 1,
+                'last_video_date': today
+            },
+            '$inc': {'total_videos_watched': 1}}
+        )
+    else:
+        await self.col.update_one(
+            {'id': user_id},
+            {'$inc': {
+                'videos_today': 1,
+                'total_videos_watched': 1
+            }}
+        )
+
+async def update_user_category(self, user_id, category):
+    """Update category"""
+    await self.col.update_one(
+        {'id': user_id},
+        {'$set': {'current_category': category}}
+    )
+
+async def increment_referral(self, user_id):
+    """Track referrals"""
+    await self.col.update_one(
+        {'id': user_id},
+        {'$inc': {'referral_count': 1}}
+    )
+
+async def like_video(self, user_id, video_id):
+    """Like video"""
+    await self.col.update_one(
+        {'id': user_id},
+        {'$pull': {'disliked_videos': video_id}}
+    )
+    await self.col.update_one(
+        {'id': user_id},
+        {'$addToSet': {'liked_videos': video_id}}
+    )
+    await self.video_stats.update_one(
+        {'video_id': video_id},
+        {'$inc': {'likes': 1}},
+        upsert=True
+    )
+
+async def dislike_video(self, user_id, video_id):
+    """Dislike video"""
+    await self.col.update_one(
+        {'id': user_id},
+        {'$pull': {'liked_videos': video_id}}
+    )
+    await self.col.update_one(
+        {'id': user_id},
+        {'$addToSet': {'disliked_videos': video_id}}
+    )
+    await self.video_stats.update_one(
+        {'video_id': video_id},
+        {'$inc': {'dislikes': 1}},
+        upsert=True
+    )
+
+async def get_video_likes(self, video_id):
+    """Get likes"""
+    stats = await self.video_stats.find_one({'video_id': video_id})
+    return stats.get('likes', 0) if stats else 0
+
+async def get_video_dislikes(self, video_id):
+    """Get dislikes"""
+    stats = await self.video_stats.find_one({'video_id': video_id})
+    return stats.get('dislikes', 0) if stats else 0
+
+async def add_bookmark(self, user_id, video_id):
+    """Bookmark video"""
+    await self.bookmarks.update_one(
+        {'user_id': user_id},
+        {'$addToSet': {'videos': video_id}},
+        upsert=True
+    )
+
+async def get_bookmarks(self, user_id):
+    """Get bookmarks"""
+    doc = await self.bookmarks.find_one({'user_id': user_id})
+    return doc.get('videos', []) if doc else []
+
 # Initialize
 db = Database()
 
 
-# database/users_chats_db.py
-# Enhanced with V2 features while preserving all existing functionality
-
-import motor.motor_asyncio
-from info import DATABASE_URI, DATABASE_NAME
-from datetime import datetime, timedelta
-
-class Database:
-    
-    def __init__(self, uri, database_name):
-        self._client = motor.motor_asyncio.AsyncIOMotorClient(uri)
-        self.db = self._client[database_name]
-        self.col = self.db.users
-        self.grp = self.db.groups
-        
-        # New collections for V2 features
-        self.video_stats = self.db.video_stats  # Video likes/dislikes
-        self.bookmarks = self.db.bookmarks  # User bookmarks
-
-    def new_user(self, id, name):
-        """Enhanced user document with V2 fields"""
-        return dict(
-            id=id,
-            name=name,
-            ban_status=True,  # True = Not banned (keeping existing logic)
-            
-            # EXISTING PREMIUM FIELDS (preserved)
-            has_premium=False,
-            premium_expires=None,
-            premium_type=None,
-            
-            # NEW V2 FIELDS - Token/Access System
-            access_expires=datetime.now(),  # Token expiration
-            total_videos_watched=0,  # Lifetime count
-            videos_today=0,  # Daily count
-            last_video_date=datetime.now().date().isoformat(),  # For daily reset
-            current_category='all',  # User's browsing category
-            referral_count=0,  # Number of successful referrals
-            liked_videos=[],  # List of video IDs user liked
-            disliked_videos=[],  # List of video IDs user disliked
-        )
-
-    def new_group(self, id, title):
-        """Existing group document - unchanged"""
-        return dict(
-            id=id,
-            title=title,
-            chat_status=True,
-        )
-
-    # ==================== EXISTING FUNCTIONS (PRESERVED) ====================
-
-    async def add_user(self, id, name):
-        """Existing function - unchanged"""
-        user = self.new_user(id, name)
-        await self.col.insert_one(user)
-
-    async def is_user_exist(self, id):
-        """Existing function - unchanged"""
-        user = await self.col.find_one({'id': int(id)})
-        return bool(user)
-
-    async def total_users_count(self):
-        """Existing function - unchanged"""
-        count = await self.col.count_documents({})
-        return count
-
-    async def remove_ban(self, id):
-        """Existing function - unchanged"""
-        await self.col.update_one({'id': id}, {'$set': {'ban_status': True}})
-
-    async def ban_user(self, user_id):
-        """Existing function - unchanged"""
-        await self.col.update_one({'id': user_id}, {'$set': {'ban_status': False}})
-
-    async def get_ban_status(self, id):
-        """Existing function - unchanged"""
-        user = await self.col.find_one({'id': int(id)})
-        if not user:
-            return True
-        return user.get('ban_status', True)
-
-    async def get_all_users(self):
-        """Existing function - unchanged"""
-        return self.col.find({})
-
-    async def delete_user(self, user_id):
-        """Existing function - unchanged"""
-        await self.col.delete_many({'id': int(user_id)})
-
-    async def get_user(self, user_id):
-        """Existing function - unchanged"""
-        user = await self.col.find_one({'id': int(user_id)})
-        return user
-
-    # ==================== EXISTING PREMIUM FUNCTIONS (ENHANCED) ====================
-
-    async def add_premium(self, user_id, time_str):
-        """Enhanced to also grant access - existing functionality preserved"""
-        # Parse time string (e.g., "1 month", "7 days")
-        parts = time_str.split()
-        amount = int(parts[0])
-        unit = parts[1].lower()
-        
-        if 'month' in unit:
-            days = amount * 30
-        elif 'week' in unit:
-            days = amount * 7
-        elif 'day' in unit:
-            days = amount
-        elif 'year' in unit:
-            days = amount * 365
-        else:
-            days = amount * 30  # Default to months
-        
-        expiry_time = datetime.now() + timedelta(days=days)
-        
-        await self.col.update_one(
-            {'id': user_id},
-            {'$set': {
-                'has_premium': True,
-                'premium_expires': expiry_time,
-                'premium_type': time_str,
-                'access_expires': expiry_time  # Also extend access token
-            }}
-        )
-
-    async def remove_premium(self, user_id):
-        """Existing function - unchanged"""
-        await self.col.update_one(
-            {'id': user_id},
-            {'$set': {
-                'has_premium': False,
-                'premium_expires': None,
-                'premium_type': None
-            }}
-        )
-
-    async def has_premium_access(self, user_id):
-        """Check if user has active premium - existing logic"""
-        user = await self.col.find_one({'id': int(user_id)})
-        if user and user.get('has_premium'):
-            if user.get('premium_expires'):
-                if user['premium_expires'] > datetime.now():
-                    return True
-                else:
-                    # Auto-remove expired premium
-                    await self.remove_premium(user_id)
-        return False
-
-    async def get_premium_users(self):
-        """Existing function - unchanged"""
-        users = self.col.find({'has_premium': True})
-        return await users.to_list(length=None)
-
-    # ==================== NEW V2 FUNCTIONS ====================
-
-    async def check_access_status(self, user_id):
-        """Check if user has active access (premium OR token)"""
-        user = await self.get_user(user_id)
-        if not user:
-            return False
-        
-        # Premium users always have access
-        if await self.has_premium_access(user_id):
-            return True
-        
-        # Check token access
-        access_expires = user.get('access_expires', datetime.now())
-        return access_expires > datetime.now()
-
-    async def grant_access(self, user_id, hours=12):
-        """Grant temporary token access"""
-        user = await self.get_user(user_id)
-        if not user:
-            return
-        
-        # Extend current access or create new
-        current_expiry = user.get('access_expires', datetime.now())
-        if current_expiry > datetime.now():
-            # Extend from current expiry
-            new_expiry = current_expiry + timedelta(hours=hours)
-        else:
-            # Create new expiry from now
-            new_expiry = datetime.now() + timedelta(hours=hours)
-        
-        await self.col.update_one(
-            {'id': user_id},
-            {'$set': {'access_expires': new_expiry}}
-        )
-
-    async def increment_video_watch(self, user_id):
-        """Track video watches with daily reset"""
-        user = await self.get_user(user_id)
-        if not user:
-            return
-        
-        today = datetime.now().date().isoformat()
-        
-        # Reset daily count if new day
-        if user.get('last_video_date') != today:
-            await self.col.update_one(
-                {'id': user_id},
-                {'$set': {
-                    'videos_today': 1,
-                    'last_video_date': today
-                },
-                '$inc': {'total_videos_watched': 1}}
-            )
-        else:
-            await self.col.update_one(
-                {'id': user_id},
-                {'$inc': {
-                    'videos_today': 1,
-                    'total_videos_watched': 1
-                }}
-            )
-
-    async def update_user_category(self, user_id, category):
-        """Update user's current browsing category"""
-        await self.col.update_one(
-            {'id': user_id},
-            {'$set': {'current_category': category}}
-        )
-
-    async def increment_referral(self, user_id):
-        """Increment referral count"""
-        await self.col.update_one(
-            {'id': user_id},
-            {'$inc': {'referral_count': 1}}
-        )
-
-    async def like_video(self, user_id, video_id):
-        """Add video to user's liked list"""
-        # Remove from disliked if exists
-        await self.col.update_one(
-            {'id': user_id},
-            {'$pull': {'disliked_videos': video_id}}
-        )
-        # Add to liked
-        await self.col.update_one(
-            {'id': user_id},
-            {'$addToSet': {'liked_videos': video_id}}
-        )
-        
-        # Update video stats
-        await self.video_stats.update_one(
-            {'video_id': video_id},
-            {'$inc': {'likes': 1}, '$pull': {'disliked_by': user_id}, '$addToSet': {'liked_by': user_id}},
-            upsert=True
-        )
-
-    async def dislike_video(self, user_id, video_id):
-        """Add video to user's disliked list"""
-        # Remove from liked if exists
-        await self.col.update_one(
-            {'id': user_id},
-            {'$pull': {'liked_videos': video_id}}
-        )
-        # Add to disliked
-        await self.col.update_one(
-            {'id': user_id},
-            {'$addToSet': {'disliked_videos': video_id}}
-        )
-        
-        # Update video stats
-        await self.video_stats.update_one(
-            {'video_id': video_id},
-            {'$inc': {'dislikes': 1}, '$pull': {'liked_by': user_id}, '$addToSet': {'disliked_by': user_id}},
-            upsert=True
-        )
-
-    async def get_video_likes(self, video_id):
-        """Get like count for a video"""
-        stats = await self.video_stats.find_one({'video_id': video_id})
-        return stats.get('likes', 0) if stats else 0
-
-    async def get_video_dislikes(self, video_id):
-        """Get dislike count for a video"""
-        stats = await self.video_stats.find_one({'video_id': video_id})
-        return stats.get('dislikes', 0) if stats else 0
-
-    async def add_bookmark(self, user_id, video_id):
-        """Bookmark a video"""
-        await self.bookmarks.update_one(
-            {'user_id': user_id},
-            {'$addToSet': {'videos': video_id}},
-            upsert=True
-        )
-
-    async def get_bookmarks(self, user_id):
-        """Get user's bookmarks"""
-        doc = await self.bookmarks.find_one({'user_id': user_id})
-        return doc.get('videos', []) if doc else []
-
-    async def remove_bookmark(self, user_id, video_id):
-        """Remove a bookmark"""
-        await self.bookmarks.update_one(
-            {'user_id': user_id},
-            {'$pull': {'videos': video_id}}
-        )
-
-    # ==================== EXISTING GROUP FUNCTIONS (UNCHANGED) ====================
-
-    async def add_chat(self, chat, title):
-        """Existing function - unchanged"""
-        chat_doc = self.new_group(chat, title)
-        await self.grp.insert_one(chat_doc)
-
-    async def get_chat(self, chat):
-        """Existing function - unchanged"""
-        chat_doc = await self.grp.find_one({'id': int(chat)})
-        return chat_doc.get('chat_status', True) if chat_doc else True
-
-    async def re_enable_chat(self, id):
-        """Existing function - unchanged"""
-        await self.grp.update_one({'id': int(id)}, {'$set': {'chat_status': True}})
-
-    async def update_settings(self, id, settings):
-        """Existing function - unchanged"""
-        await self.grp.update_one({'id': int(id)}, {'$set': {'settings': settings}})
-
-    async def get_settings(self, id):
-        """Existing function - unchanged"""
-        chat = await self.grp.find_one({'id': int(id)})
-        if chat:
-            return chat.get('settings')
-        return False
-
-    async def disable_chat(self, chat):
-        """Existing function - unchanged"""
-        await self.grp.update_one({'id': int(chat)}, {'$set': {'chat_status': False}})
-
-    async def total_chat_count(self):
-        """Existing function - unchanged"""
-        count = await self.grp.count_documents({})
-        return count
-
-    async def get_all_chats(self):
-        """Existing function - unchanged"""
-        return self.grp.find({})
-
-    async def get_db_size(self):
-        """Existing function - unchanged"""
-        return (await self.db.command("dbstats"))['dataSize']
-
-# Initialize database instance
-db = Database(DATABASE_URI, DATABASE_NAME)
